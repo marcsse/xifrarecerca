@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <title>XifraRecerca</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f9f9fa; margin: 0; padding: 0;}
+    .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px #e1e1ef; padding: 32px; }
+    h1 { text-align: center; color: #224488; }
+    h2 { color: #224488; margin-top: 0; }
+    button, input, textarea { font-size: 1rem; margin-top: 10px; }
+    button { background: #224488; color: #fff; border: none; border-radius: 8px; padding: 12px 32px; cursor: pointer; transition: background .2s; }
+    button:hover { background: #1a3566; }
+    .row { display: flex; gap: 12px; margin-bottom: 18px; }
+    .row > * { flex: 1; }
+    label { font-weight: 500; }
+    textarea, input[type="number"] { width: 100%; padding: 8px; border: 1px solid #aaa; border-radius: 6px; resize: vertical; min-height: 40px; }
+    .result { background: #eef3ff; border-radius: 8px; padding: 16px; margin-top: 18px; white-space: pre-wrap; font-size: 1.05em; }
+    .back { margin-top: 24px; display: block; text-align: center; color: #224488; cursor: pointer; text-decoration: underline; }
+    .download-btn { background: #338822; }
+    .download-btn:hover { background: #266a16; }
+    .small { font-size: 0.9em; color: #555; }
+    .alert { background: #fde5e5; color: #a00; padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: .98em;}
+    .footer { text-align: center; font-size: .93em; color: #aaa; margin: 36px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="pantalla-inici">
+      <h1>XifraRecerca</h1>
+      <p>
+        Benvingut a XifraRecerca, el teu xifrador i desxifrador de confiança,<br>
+       desenvolupat per Marc San José com a part del treball de recerca de batxillerat. <br>
+	   Per qualsevol dubte o suggerència, no dubtis a contactar-me a msanjosecasals@inspineda.com
+      </p>
+      <div style="margin-top:30px; display:flex; flex-direction:column; gap:16px;">
+        <button onclick="mostrarPantalla('xifrar')">Xifrar un missatge</button>
+        <button onclick="mostrarPantalla('desxifrar')">Desxifrar un missatge</button>
+      </div>
+    </div>
+
+    <div id="pantalla-xifrar" style="display:none;">
+      <h2>🔐 Xifrar un missatge</h2>
+      <form id="form-xifrar" autocomplete="off">
+        <label for="input-text">Text original:</label>
+        <textarea id="input-text" rows="3" required></textarea>
+        <div class="row">
+          <div>
+            <label for="input-p">Nombre primer p (≥2):</label>
+            <input type="number" id="input-p" min="2" step="1" required>
+          </div>
+          <div>
+            <label for="input-q">Nombre primer q (≥2):</label>
+            <input type="number" id="input-q" min="2" step="1" required>
+          </div>
+        </div>
+        <button type="submit">Xifrar</button>
+      </form>
+      <div id="alert-xifrar" class="alert" style="display:none;"></div>
+      <div id="result-xifrar" class="result" style="display:none;"></div>
+      <button id="download-xifrar" class="download-btn" style="display:none;">Descarrega resultat (.txt)</button>
+      <div class="back" onclick="mostrarPantalla('inici')">← Torna a l'inici</div>
+    </div>
+
+    <div id="pantalla-desxifrar" style="display:none;">
+      <h2>🔓 Desxifrar un missatge</h2>
+      <form id="form-desxifrar" autocomplete="off">
+        <label for="input-xifrat">Missatge xifrat (llista de nombres separats per comes):</label>
+        <textarea id="input-xifrat" rows="3" required></textarea>
+        <div class="row">
+          <div>
+            <label for="input-d">Clau privada d:</label>
+            <input type="number" id="input-d" min="1" step="1" required>
+          </div>
+          <div>
+            <label for="input-n">Clau privada n:</label>
+            <input type="number" id="input-n" min="2" step="1" required>
+          </div>
+        </div>
+        <button type="submit">Desxifrar</button>
+      </form>
+      <div id="result-desxifrar" class="result" style="display:none;"></div>
+      <div class="back" onclick="mostrarPantalla('inici')">← Torna a l'inici</div>
+    </div>
+  </div>
+  <div class="footer">
+    &copy; 2025 XifraRecerca · Fet per Marc San José
+  </div>
+
+  <script>
+    // Navegació
+    function mostrarPantalla(quin) {
+      document.getElementById('pantalla-inici').style.display = quin === 'inici' ? '' : 'none';
+      document.getElementById('pantalla-xifrar').style.display = quin === 'xifrar' ? '' : 'none';
+      document.getElementById('pantalla-desxifrar').style.display = quin === 'desxifrar' ? '' : 'none';
+      document.getElementById('result-xifrar').style.display = 'none';
+      document.getElementById('download-xifrar').style.display = 'none';
+      document.getElementById('result-desxifrar').style.display = 'none';
+      document.getElementById('alert-xifrar').style.display = 'none';
+      if (quin === 'xifrar') document.getElementById('form-xifrar').reset();
+      if (quin === 'desxifrar') document.getElementById('form-desxifrar').reset();
+    }
+
+    // Codi Python complet com a string
+    const pythonCode = `
+def mcd(a, b):
+    while b:
+        a, b = b, a % b
+    return a
+
+def invers_mod(a, m):
+    t, nova_t = 0, 1
+    r, nova_r = m, a
+    while nova_r != 0:
+        q = r // nova_r
+        t, nova_t = nova_t, t - q * nova_t
+        r, nova_r = nova_r, r - q * nova_r
+    if r > 1:
+        return None
+    if t < 0:
+        t += m
+    return t
+
+def es_primer(n):
+    if n < 2:
+        return False
+    if n == 2:
+        return True
+    if n % 2 == 0:
+        return False
+    for i in range(3, int(n ** 0.5) + 1, 2):
+        if n % i == 0:
+            return False
+    return True
+
+def generar_claus_segures(p, q):
+    if not es_primer(p) or not es_primer(q):
+        raise Exception("Almenys un dels nombres NO és primer.")
+    n = p * q
+    phi = (p - 1) * (q - 1)
+    e = 65537
+    if mcd(e, phi) != 1:
+        e = 3
+        while mcd(e, phi) != 1:
+            e += 2
+    d = invers_mod(e, phi)
+    if d is None:
+        raise Exception("No s'ha pogut calcular la clau privada amb aquests nombres. Prova amb altres nombres primers.")
+    return (e, n), (d, n)
+
+def text_a_blocs(text, mida_bloc):
+    blocs = []
+    for i in range(0, len(text), mida_bloc):
+        bloc = text[i:i + mida_bloc]
+        num = 0
+        for c in bloc:
+            num = num * 256 + ord(c)
+        blocs.append(num)
+    return blocs
+
+def xifrar_blocs(blocs, clau_pub):
+    e, n = clau_pub
+    return [pow(b, e, n) for b in blocs]
+
+def xifrar_paragrafs(text, mida_bloc, clau_pub):
+    paragrafs = text.split('\\n')
+    xifrat_paragrafs = []
+    for par in paragrafs:
+        blocs = text_a_blocs(par, mida_bloc)
+        xifrat = xifrar_blocs(blocs, clau_pub)
+        xifrat_paragrafs.append(xifrat)
+    return xifrat_paragrafs
+
+def blocs_a_text(blocs, mida_bloc):
+    text = ""
+    for num in blocs:
+        chars = []
+        for _ in range(mida_bloc):
+            chars.append(chr(num % 256))
+            num //= 256
+        chars.reverse()
+        text += "".join(chars)
+    return text
+
+def desxifrar_blocs(blocs_xifrats, clau_priv):
+    d, n = clau_priv
+    return [pow(b, d, n) for b in blocs_xifrats]
+
+def desxifrar_text(xifrat_blocs, clau_priv):
+    d, n = clau_priv
+    mida_bloc = 1
+    while (256 ** (mida_bloc + 1)) < n:
+        mida_bloc += 1
+    blocs = desxifrar_blocs(xifrat_blocs, clau_priv)
+    text = blocs_a_text(blocs, mida_bloc)
+    text = text.lstrip('\\x00')
+    return text
+`;
+
+    // Carrega Pyodide
+    let pyodideReady = false;
+    let pyodide = null;
+    async function carregarPyodide() {
+      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
+      pyodide.runPython(pythonCode);
+      pyodideReady = true;
+    }
+    carregarPyodide();
+
+    // Xifrar
+    document.getElementById('form-xifrar').onsubmit = async function(e) {
+      e.preventDefault();
+      if (!pyodideReady) { alert('Carregant Python...'); return; }
+      let text = document.getElementById('input-text').value;
+      let p = parseInt(document.getElementById('input-p').value, 10);
+      let q = parseInt(document.getElementById('input-q').value, 10);
+      if (!text.trim()) return alert('Introdueix un text!');
+      if (isNaN(p) || isNaN(q) || p < 2 || q < 2) return alert('Introdueix dos nombres primers vàlids!');
+      document.getElementById('alert-xifrar').style.display = 'none';
+      try {
+        pyodide.runPython(`
+p = ${p}
+q = ${q}
+clau_pub, clau_priv = generar_claus_segures(p, q)
+n = clau_pub[1]
+mida_bloc = 1
+while (256 ** (mida_bloc + 1)) < n:
+    mida_bloc += 1
+text_usuari = """${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"""
+xifrat = xifrar_paragrafs(text_usuari, mida_bloc, clau_pub)
+xifrat_concatenat = []
+for par in xifrat:
+    xifrat_concatenat.extend(par)
+        `);
+        let clau_pub = pyodide.globals.get('clau_pub').toJs();
+        let clau_priv = pyodide.globals.get('clau_priv').toJs();
+        let mida_bloc = pyodide.globals.get('mida_bloc');
+        let xifrat_concatenat = pyodide.globals.get('xifrat_concatenat').toJs();
+        let n = clau_pub[1];
+
+        if (n < 10000) {
+          document.getElementById('alert-xifrar').innerHTML =
+            '⚠️ ATENCIÓ: Bones, mag de la criptografia! Has triat nombres massa petits per xifrar... (Ideal per a demostracions, però ni s’aconsella enviar secrets de veritat així!) Si no vols que t’enxampin, et recomano que utilitzis nombres primers d’almenys sis xifres, com per exemple p = 104729 i q =1000039.';
+          document.getElementById('alert-xifrar').style.display = '';
+        }
+
+        let res = `<b>Missatge xifrat:</b><br>
+        <span class="small">Llista de nombres (separa per comes per desxifrar):</span><br>
+        ${xifrat_concatenat.join(', ')}<br>
+        <br><b>Clau pública (e, n):</b> (${clau_pub[0]}, ${clau_pub[1]})<br>
+        <b>Clau privada (d, n):</b> (${clau_priv[0]}, ${clau_priv[1]})<br>
+        <span class="small">Mida de bloc per xifrar: ${mida_bloc} caràcters</span>`;
+        document.getElementById('result-xifrar').innerHTML = res;
+        document.getElementById('result-xifrar').style.display = '';
+        let txt = `Missatge xifrat:\n${xifrat_concatenat.join(', ')}\n\nClau pública (e, n): (${clau_pub[0]}, ${clau_pub[1]})\nClau privada (d, n): (${clau_priv[0]}, ${clau_priv[1]})\nMida de bloc: ${mida_bloc} caràcters\n`;
+        document.getElementById('download-xifrar').onclick = function() {
+          let blob = new Blob([txt], {type: 'text/plain'});
+          let a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'xifrarecerca_resultat.txt';
+          a.click();
+        };
+        document.getElementById('download-xifrar').style.display = '';
+      } catch(err) {
+        let msg = err.message || '';
+        if (msg.indexOf('NO és primer') !== -1) {
+          msg = 'Error: Almenys un dels nombres NO és primer.';
+        } else if (msg.indexOf('No s\'ha pogut calcular la clau privada') !== -1) {
+          msg = "Error: No s'ha pogut calcular la clau privada amb aquests nombres. Prova amb altres nombres primers.";
+        } else {
+          msg = "Error inesperat. Comprova els nombres i el text.";
+        }
+        document.getElementById('result-xifrar').innerHTML = msg;
+        document.getElementById('result-xifrar').style.display = '';
+        document.getElementById('download-xifrar').style.display = 'none';
+      }
+    };
+
+    // Desxifrar
+    document.getElementById('form-desxifrar').onsubmit = async function(e) {
+      e.preventDefault();
+      if (!pyodideReady) { alert('Carregant Python...'); return; }
+      let xifrat_str = document.getElementById('input-xifrat').value.trim();
+      let d = parseInt(document.getElementById('input-d').value, 10);
+      let n = parseInt(document.getElementById('input-n').value, 10);
+      if (!xifrat_str) return alert('Introdueix el missatge xifrat!');
+      if (isNaN(d) || isNaN(n)) return alert('Introdueix la clau privada!');
+      let blocs = xifrat_str.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x));
+      if (!blocs.length) return alert('El missatge xifrat no és vàlid!');
+      try {
+        pyodide.runPython(`
+clau_priv = (${d}, ${n})
+xifrat_blocs = ${JSON.stringify(blocs)}
+text_desxifrat = desxifrar_text(xifrat_blocs, clau_priv)
+        `);
+        let text_desxifrat = pyodide.globals.get('text_desxifrat');
+        let res = `<b>Text desxifrat:</b><br>${text_desxifrat || '[Buit o error de desxifrat]'}<br>
+        <br><span class="small">Gràcies per utilitzar el XifraRecerca. Torna a l'inici per xifrar un altre missatge.</span>`;
+        document.getElementById('result-desxifrar').innerHTML = res;
+        document.getElementById('result-desxifrar').style.display = '';
+      } catch(err) {
+        document.getElementById('result-desxifrar').innerHTML = 'Error en desxifrar! Revisa la clau privada i el missatge.';
+        document.getElementById('result-desxifrar').style.display = '';
+      }
+    };
+
+    mostrarPantalla('inici');
+  </script>
+</body>
+</html>
